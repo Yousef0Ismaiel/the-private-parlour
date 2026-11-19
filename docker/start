@@ -1,0 +1,37 @@
+#!/bin/sh
+set -eu
+umask 077
+if [ -n "${RENDER_EXTERNAL_URL:-}" ] && [ -z "${APP_URL:-}" ]; then
+    export APP_URL="$RENDER_EXTERNAL_URL"
+fi
+
+case "${DB_CONNECTION:-sqlite}" in
+    sqlite)
+        state=/var/lib/parlour
+        mkdir -p "$state"
+        php docker/initialize.php "$state"
+        chown www-data:www-data "$state" "$state/app.env" "$DB_DATABASE"
+        chmod 0700 "$state"
+        chmod 0600 "$state/app.env" "$DB_DATABASE"
+        ;;
+    pgsql)
+        : "${DB_URL:?Postgres needs a database connection URL}"
+        if [ -z "${APP_KEY:-}" ]; then
+            : "${PARLOUR_KEY_B64:?Set a persistent application encryption key}"
+            export APP_KEY="base64:$PARLOUR_KEY_B64"
+        fi
+        ;;
+    *)
+        echo 'Select sqlite or pgsql for DB_CONNECTION.' >&2
+        exit 1
+        ;;
+esac
+
+su -s /bin/sh www-data -c 'php artisan migrate --force'
+if [ -n "${PARLOUR_YOUSEF_INVITE_HASH:-}" ]; then
+    su -s /bin/sh www-data -c 'php artisan member:invite yousef --from-env=PARLOUR_YOUSEF_INVITE_HASH'
+fi
+if [ -n "${PARLOUR_FRIEND_INVITE_HASH:-}" ]; then
+    su -s /bin/sh www-data -c 'php artisan member:invite friend --from-env=PARLOUR_FRIEND_INVITE_HASH'
+fi
+exec docker-php-entrypoint "$@"

@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    ports:
+      - "127.0.0.1:8000:80"
+    environment:
+      APP_URL: http://127.0.0.1:8000
+      SESSION_SECURE_COOKIE: "false"
+    volumes:
+      - parlour-data:/var/lib/parlour
+volumes:
+  parlour-data:
